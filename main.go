@@ -21,13 +21,23 @@ import (
 // TODO: generate convenience functions for converting some binary data to usable types
 // ✓TODO: change 'in' flag to be the rest of the cmd line args
 // ✓TODO: make default output stdout, specified by "-"
+// ✓TODO: make default input stdin when no globs are given on the cmd line
 
 func main() {
 
 	// process flags
 	// glob := flag.String("i", "", "glob specifing files to include.")
 	outfile := flag.String("o", "-", "filename of generated output. Default is stdout.")
-	filetype := flag.String("t", "text", "type of file. one of: [text, bin]")
+	filetype := flag.String("t", "text", "type of file(s) input. one of: [text, bin]")
+	flag.Usage = func() {
+		fmt.Fprintln(flag.CommandLine.Output(),
+			`go-include creates a .go file containing the text or binary (base64) content of 
+files specified by the glob pattern.
+
+USAGE: go-include [-o FILE] [-t (text|bin)] [FILE|GLOB]...
+`)
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	// get list of filenames, check for errors (including no matches)
@@ -35,8 +45,8 @@ func main() {
 	for _, glob := range flag.Args() {
 		filenames, err := filepath.Glob(glob)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
-			return
+			fmt.Fprintf(os.Stderr, "include: error: with glob '%s': %s\n", glob, err.Error())
+			continue
 		}
 		if len(filenames) > 0 {
 			files = append(files, filenames...)
@@ -45,7 +55,12 @@ func main() {
 		}
 	}
 
-	// exit if no files found
+	// if no args were given, read from stdin
+	if len(flag.Args()) == 0 {
+		files = append(files, os.Stdin.Name())
+	}
+
+	// exit if no files are found AND something was specified on the command line
 	if len(files) < 1 {
 		fmt.Fprintf(os.Stderr, "include: error: found no files matching glob(s) %s\n", flag.Args())
 		return
